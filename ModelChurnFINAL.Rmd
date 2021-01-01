@@ -1,0 +1,505 @@
+---
+title: "MODELChurnCustomers"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+1. Introduction
+Scenario: A manager at the bank is disturbed with an alarming number of customers leaving their credit card services. You have been hired as a data scientist to predict who is gonna get leave their company so they can proactively go to the customer to provide them better services and turn customers' decisions in the opposite direction.
+Note: Attrition_Flag is the target variable here for which we have to create the predictive model.
+
+2. Data Wrangling
+```{r cc1}
+
+# to omit NA value :cc1 <- na.omit(cc1) 
+#### Remove duplicates if they exist
+#airbnb <- airbnb[!duplicated(airbnb), ]
+#### NA checking
+#md.pattern(airbnb,rotate.names = TRUE, plot = FALSE)
+#### Replace NA with 0
+# airbnb[is.na(airbnb)] <- 0
+#airbnb <- airbnb %>% drop_na()
+
+library(tidyverse)
+library(plyr)
+library(readr)
+library(dplyr)
+cc1 <- read_csv("BankChurners.csv") # original dataset
+#----------------------------
+#----------------------------
+problems(cc1) # no problems with cc1
+head(cc1)
+dim(cc1) # # returns dimensions;10127 rows   23 col
+cc1 %>% filter(!is.na(Income_Category))
+(is.na(cc1))
+glimpse(cc1)
+```
+
+Note: 'Dependent count' tells us the number of dependents a user has. That is, how many people are dependent on a credit card user for financial support. A higher count tells us that the expenditures can be high.
+
+```{r cc2}
+# selected the columns we care abouts
+cc2 <- cc1 %>% select(Customer_Age,Gender,Dependent_count,Education_Level,Marital_Status,Income_Category,Card_Category,Credit_Limit, Attrition_Flag) %>% filter( !is.na(.))
+# see the head of it
+head(cc2)
+dim(cc2) #dimensions 10127 rows 9 columns
+#(cc2 <- na.omit(cc2) ) # EXACt SAME as :  %>% filter( !is.na(.))
+#----------------------------
+#----------------------------
+cc2 %>% group_by(Income_Category,Marital_Status)
+#----------------------------
+#----------------------------
+# Lets see which distinct types there are
+(distinct(cc2, Income_Category))  # 6 types:$60K - $80K, Less than $40K ,$80K - $120K  ,$40K - $60K ,$120K + ,Unknown 
+(distinct(cc2, Marital_Status))  # 4 types:  Married, Single, Divorced, Unknown 
+(distinct(cc2, Card_Category))  # 4 types:  Blue, Gold, Siler, Platinum
+#----------------------------
+#----------------------------
+# Drop all the "unknown" rows from Marital_Status & Income_Category
+# 82x9, 82 rows must remove these rows
+cc3 <- cc2 %>% select(Customer_Age,Gender,Dependent_count,Education_Level,Marital_Status,Income_Category,Card_Category,Credit_Limit, Attrition_Flag) %>% filter(Marital_Status != "Unknown" , Income_Category != "Unknown",Education_Level !="Unknown")
+#----------------------------
+#----------------------------
+head(cc3)
+dim(cc3) #8348 rows by 9 cols
+#----------------------------
+#----------------------------
+
+```
+
+```{r cc3}
+
+#----------------------------
+#----------------------------
+#install.packages("dplyr")
+library(dplyr)
+
+# Rename Label Colum to Exited_Flag
+dataCC4 <- cc3 %>% rename(Exited_Flag = Attrition_Flag)
+#dataaa <- cc3 %>% rename(Exited_Flag = Attrition_Flag)
+#----------------------------
+#----------------------------
+dataCC4 <- cc3
+#Rename values 
+dataCC4 $Attrition_Flag[dataCC4 $Attrition_Flag == "Existing Customer"] <- "Current"
+dataCC4 $Attrition_Flag[dataCC4 $Attrition_Flag == "Attrited Customer"] <- "Exited"
+
+#----------------------------
+#----------------------------
+(dataCC4  %>% group_by(Attrition_Flag) %>% summarize(meanAge= mean(Customer_Age), meanDepdent= mean(Dependent_count), meanCreditLim= mean(Credit_Limit)))
+
+#AKA: 
+  summarise_mean <- function(data, vars) {
+ data %>% summarise(n = n(), across({{ vars }}, mean))
+}
+
+#dataCC4  %>% 
+  #group_by(Attrition_Flag) %>% 
+# summarise_mean(where(is.numeric))
+
+#----------------------------
+#----------------------------
+#see the count of each 
+
+#(dataCC4  %>% select(Gender,Attrition_Flag) %>% group_by(Gender) %>% count(Exited_Flag) )      
+(dataCC4  %>% group_by(Education_Level) %>% count(Attrition_Flag) ) 
+(dataCC4  %>% group_by(Marital_Status) %>% count(Attrition_Flag) ) 
+(dataCC4  %>% group_by(Income_Category) %>% count(Attrition_Flag) ) 
+(dataCC4  %>% group_by(Card_Category) %>% count(Attrition_Flag) ) 
+summary(dataCC4)
+```
+3. Exploratory Data Analysis
+```{r visuals}
+
+
+#----------------------------
+#----------------------------
+# 2 discrete var, but using 1 as a fill. 
+# Count, with Y being Income Category, Fill is our 
+ggplot(dataCC4 , aes(y = Income_Category)) +
+ geom_bar(aes(fill = Attrition_Flag), position = position_stack(reverse = FALSE)) +theme(legend.position = "top") + theme_classic() + xlab("Count") + ylab("Income Category") + ggtitle(" Customer Status by Income" )+  labs(fill = "Customer Status")
+#----------------------------
+
+# RE-ODER factor levels
+dataCC4$Education_Level <- factor(dataCC4$Education_Level, levels = c("Uneducated","High School",
+                                                                    "College",
+                                                                    "Graduate",
+                                                                    "Post-Graduate","Doctorate"))
+ggplot(dataCC4 , aes(y = Education_Level)) +
+ geom_bar(aes(fill = Attrition_Flag), position = position_stack(reverse = FALSE)) +
+ theme(legend.position = "top") + theme_classic() + xlab("Count") + ylab("Education Level") + ggtitle("Customer Status by Education Level" ) +  labs(fill = "Customer Status")
+#----------------------------
+ggplot(dataCC4 , aes(y = Marital_Status)) +
+ geom_bar(aes(fill = Attrition_Flag), position = position_stack(reverse = FALSE)) +
+ theme(legend.position = "top") + theme_classic() + xlab("Count") + ylab("Martial Status") + ggtitle("Customer Status by Martial Status" )+  labs(fill = "Customer Status")
+#----------------------------
+ggplot(dataCC4 , aes(y = Card_Category)) +
+ geom_bar(aes(fill =  Attrition_Flag), position = position_stack(reverse = FALSE)) +
+ theme(legend.position = "top") + theme_classic() + xlab("Count") + ylab("Card Category") + ggtitle("Customer Status by Card Category" )+  labs(fill = "Customer Status")
+
+#----------------------------
+ggplot(dataCC4 , aes(y = Gender)) +
+ geom_bar(aes(fill =  Attrition_Flag), position = position_stack(reverse = FALSE)) +
+ theme(legend.position = "top") + theme_classic() + xlab("Count") + ylab("Gender") + ggtitle("Customer Status by Gender" )+  labs(fill = "Customer Status")
+#There are more samples of females in our dataset compared to males but the percentage of difference is not that significant so we can say that genders are uniformly distributed.
+#----------------------------
+#----------------------------
+
+# 2 discrete variables x,y
+#need  to specify which group the proportion is to be calculated over.
+ggplot(dataCC4 , aes(Income_Category,Attrition_Flag, colour= after_stat(prop), size = after_stat(prop), group = Income_Category)) + geom_count() +  scale_size_area() + theme_classic() +xlab("Income Category") + ylab("Status of Customer") + ggtitle("Customer Status by Income Proportion" )
+#----------------------------
+# Discrete X, Continous Y, Violin Plots
+
+ggplot(dataCC4 , aes(Attrition_Flag,Credit_Limit,color= Credit_Limit)) + geom_violin(draw_quantiles = c(0.25,0.5,0.75),colour="red",size=1.4) + theme_classic() +xlab("Income Category") + ylab("Credit Limit") + ggtitle("Customer Status by Credit Limit" ) +   labs(fill = "Customer Status")
+
+# RE-ODER factor levels
+dataCC4 $Income_Category <- factor(dataCC4 $Income_Category, levels = c("Less than $40K","$40K - $60K","$60K - $80K","$80K - $120K","$120K +"))
+
+ggplot(dataCC4 , aes(Income_Category,Credit_Limit,color= Credit_Limit)) + geom_violin(draw_quantiles = c(0.25,0.5,0.75),colour="blue",size=1) + theme_classic() +xlab("Income Category") + ylab("Credit Limit") + ggtitle("Income Category by Credit Limit" )
+
+#----------------------------
+#----------------------------
+#
+#library(plyr)
+#mu <- ddply(dataaa, "Exited_Flag", summarise, grp.mean=mean(Credit_Limit))
+#head(mu)
+#
+ggplot(dataCC4, aes(x=Credit_Limit, fill=Attrition_Flag)) +
+  geom_area(stat ="bin") + xlab("Credit Limit")+ylab("Count") +ggtitle("Customer Status by Credit Limit " ) +  labs(fill = "Customer Status")
+
+```
+
+```{r Modeling}
+# goal of a model is to provide a simple low-dimensional summary of a dataset.
+# use models to partition data into patterns and residuals
+# fitted model is just the closest model from a family of models
+
+#Classification models are models that predict a categorical label. 
+#It will be interesting to study which characteristic(s) discriminates each category and to what extent.
+#  predicting whether a customer will a customer will exit or stay with the company
+# logistic regression algorithm
+
+library(tidyverse)
+library(modelr)
+library(plyr)
+library(readr)
+library(dplyr)
+library(caret)
+
+# glimpse is from dplyr
+# output shows that the dataset has 
+glimpse(dataCC4)
+# 3 dbls, 
+
+# convert the non numeric into factors.
+names <- c(2,5,7,9)
+dataCC4[,names] <- lapply(dataCC4[,names] , factor)
+
+#----------------------------
+# DATA PARTITIONING
+#----------------------------
+#build our model on the Train dataset & evaluate its performance on the Test dataset
+# aka.  holdout-validation approach to evaluating model performance.
+
+set.seed(100) # sets random seed for reproducibility of results
+library(caTools) # for data partioning
+
+#  create the training and test datasets. The train dataset contains 70 percent of the data (420 observations of 10 variables) while the test data contains the remaining 30 percent (180 observations of 10 variables).
+spl = sample.split(dataCC4$Attrition_Flag, SplitRatio = 0.7)
+train = subset(dataCC4, spl==TRUE)
+test = subset(dataCC4, spl==FALSE)
+print(dim(train)) # 4957 rows/obs 9 cols/variables
+print(dim(test)) # 2124 rows/obs  9 cols/variables
+
+#----------------------------
+#
+#----------------------------
+#BUILD, PREDICT &  EVALUATE the Model
+
+#----------------------------
+# BUILD
+#----------------------------
+# fit the logistic regression model, 
+#the first step is to instantiate the algorithm.
+# binomial b/c 2 possible outcomes
+model_glm = glm(Attrition_Flag ~ . , family="binomial",data = train)
+summary(model_glm)
+#The significance code ‘***’ in the above output shows the relative importance of the feature variables
+# AIC estimates the relative amount of information lost by a given model:
+  #the less information a model loses, the higher the quality of that model.
+  #  Lower AIC values indicate a better-fit model,
+
+# Baseline Accuracy
+   #Let's evaluate the model further, 
+  # Since the majority class of the target (Y) variable has a proportion of 0.84, the baseline     accuracy is 84 percent.
+prop.table(table(train$Attrition_Flag))
+
+#Let's now evaluate the model performance on the training and test data, which should ideally be better than the baseline accuracy. 
+
+# PREDICTIONS on the TRAIN set
+predictTrain = predict(model_glm, data = train, type = "response")
+
+# creates confusion matrix w/ threshold of 0.5,
+  #which means that for probability predictions equal to or greater than 0.5, the algorithm will predict the Current response for the Y variable. 
+table(train$Attrition_Flag, predictTrain >= 0.1)
+#prints the accuracy of the model on the training data, using the confusion matrix, and the accuracy comes out to be 40 percent.
+(50+774)/nrow(test) #Accuracy - 40% (50+774)/2124
+
+#We then repeat this process on the TEST data, and the accuracy comes out to be __ percent.
+#Predictions on the test set
+predictTest = predict(model_glm, newdata = test, type = "response")
+# Confusion matrix on test set
+table(test$Attrition_Flag, predictTest >= 0.5)
+1790/nrow(test) #Accuracy - 84%
+
+# you have learned techniques of building a classification model in R using the powerful logistic regression algorithm. 
+#The baseline accuracy for the data was 84 percent, 
+#while the accuracy on the training and test data was 40 percent, and 84 percent, respectively. Overall, the logistic regression model is beating the baseline accuracy by a big margin on both the train and test datasets, and the results are very good.
+
+
+#We have only 16.07% of customers who have churned. Thus, it's a bit difficult to train our model to predict churning customers.
+
+#Classification is most common task.
+#Where the goal is to use observed data to recognize which category an observation belongs to. 
+
+#dataset$Attrition_Flag <- ifelse(dataset_Attrition_Flag == 'Attrited Customer', 1, 0)
+```
+
+```{r ML}
+dataCC5 <- dataCC4
+#dataCC6 <- dataCC4
+unique(dataCC5$Attrition_Flag) #Levels: Current Exited
+# Encoding the target feature as factor
+dataCC5$Attrition_Flag = factor(dataCC5$Attrition_Flag, levels = c(0, 1))
+
+
+# spliting datast into Train & Test Set
+#install.packages('caTools')
+library(caTools) # for data partioning
+set.seed(123) #SEED
+#SPLIT
+split = sample.split(dataCC5$Attrition_Flag, SplitRatio = 0.75)
+
+train_set = subset(dataCC5,split==TRUE) #TRAIN
+test_set = subset(dataCC5,split==FALSE) #TEST
+
+#FEATURE SCALING: age
+library(caret)
+#train_set[-9] = scale(train_set[-9])
+#test_set[-9] = scale(test_set[-9])
+
+#install.packages('e1071')
+library(e1071)
+
+#model_glm = glm(Attrition_Flag ~ . , family="binomial",data = train)
+#classifier = svm(formula= Attrition_Flag ~ .,
+              #   data= train_set,
+              #   type= 'C-classification',
+              #   kernel = 'radial')
+
+# predicting Test Set Results
+#y_pred = predict(classifier, newdata = train_set[-9])
+
+# making confusion matrix
+#cm = table(test_set[, 3],y_pred)
+
+```
+
+We consider the 95% confidence interval of Credit Limit.
+As the CreditLimit is greater than 0, we narrow the confidence interval.
+There are 91.75% data locates within the confidence interval. We will keep the corresponding records and store the rest in another variable rest.data for latter analysis.
+```{r CI}
+mean.Credit_Limit <- mean(dataCC5$Credit_Limit)
+std.Credit_Limit <- sqrt(var(dataCC5$Credit_Limit))
+df = dim(dataCC5)[1] - 9
+conf.Credit_Limit <- mean.Credit_Limit + c(-1, 1) * qt(0.975, df) * std.Credit_Limit
+# As the CreditLimit is greater than 0, we narrow the confidence interval
+conf.Credit_Limit[1] <- 0
+conf.Credit_Limit
+#There are 91.75% data locates within the confidence interval. We will keep the corresponding records and store the rest in another variable rest.data for later analysis.
+sum(dataCC5$Credit_Limit <= conf.Credit_Limit[2]) / dim(dataCC5)[1]
+#----------------------------
+#
+#----------------------------
+rest.data <- dataCC5 %>%
+  filter(Credit_Limit > conf.Credit_Limit[2])
+dataCC5 <- dataCC5 %>%
+  filter(Credit_Limit <= conf.Credit_Limit[2]) %>%
+  filter(Credit_Limit != 0)
+
+#We recall the historgrams of Credit Limit
+boxplot_credLim <- dataCC5 %>%
+  ggplot() +
+  geom_boxplot(aes(Credit_Limit))
+(boxplot_credLim)
+histplot <- dataCC5 %>%
+  ggplot() +
+  geom_histogram(aes(Credit_Limit))
+(histplot)
+#----------------------------
+#
+#----------------------------
+#We consider a log-transofrmation to convert the distribution of the histogram to normal distribution. Right-skew.
+histplot <- dataCC5 %>%
+  ggplot() +
+  geom_histogram(aes(log(Credit_Limit)))
+(histplot)
+qqplot <- dataCC5 %>%
+  ggplot() +
+  geom_qq(aes(sample = log(Credit_Limit)))
+(qqplot)
+#It seems that normality exists. Great! There are 6 types of categorical variables.
+
+# Distrubution of Income Category
+p1 <- dataCC5 %>%
+  ggplot() +
+  geom_histogram(aes(Income_Category, fill = Income_Category), stat = "count")
+(p1)
+# Box Plots of Depdent count & Income Category
+p2 <- dataCC5 %>%
+  ggplot() +
+  geom_boxplot(aes(x = Dependent_count, y = Income_Category, color = Income_Category))
+(p2)
+```
+
+Modelling:
+Train and test split
+Split 20% as test dataset and 80% as training dataset.
+```{r ModelingPt2}
+#Train and test split
+#Split 20% as test dataset and 80% as training dataset.
+### convert character to factor
+dataCC5$Gender <-as.factor(dataCC5$Gender)
+
+# Split
+set.seed(100)
+train.index <- sample(nrow(dataCC5), 0.7*nrow(dataCC5), replace = FALSE)
+train.set <- dataCC5[train.index, ]
+test.set <- dataCC5[-train.index, ]
+#The following aims to build a model to predict the price. ## Evaluation We will use MSE as the criteria to measure the model performance.
+RMSE <- function(true, pred){
+  residuals <- true - pred
+  res <- sqrt(mean(residuals^2))
+  return(res)
+}
+#----------------------------
+#
+#----------------------------
+#Linear regression
+#Linear regressoin is a kind of simple regression methods. It is easy to be conducted while it has some strict assumptions. The following code will perform the modeling process with check some assumptions. ### Multicolinearity
+#library(corrplot)
+#cor <- cor(dataCC5)
+#corrplot::corrplot(cor, method = 'ellipse',  type = 'lower')
+#cor(dataCC5$Credit_Limit, dataCC5$Dependent_count)
+
+# IF data had more numeric values use this for 
+# correlation plot: 
+#M <- cor(dataCC5)
+#corrplot(cor(dataCC5), method = "circle")
+```
+
+
+```{r ModelingPt3}
+AICs <- c()
+models <- c()
+### Modelling 
+start.model <- lm(Credit_Limit ~ Customer_Age, data = train.set)
+
+# summary(start.model) 
+models <- append(models, as.character(start.model$call)[2])
+AICs <- append(AICs, AIC(start.model))
+
+# Add next varaible
+update.model <- update(start.model, . ~ . + Gender)
+
+# summary(update.model)
+models <- append(models, as.character(update.model$call)[2])
+AICs <- append(AICs, AIC(update.model))
+
+# Add next var
+update.model <- update(update.model, . ~ . + Dependent_count)
+
+# summary(update.model)
+models <- append(models, as.character(update.model$call)[2])
+AICs <- append(AICs, AIC(update.model))
+
+# Add next var
+update.model <- update(update.model, . ~ . + Education_Level)
+
+# summary(update.model)
+models <- append(models, as.character(update.model$call)[2])
+AICs <- append(AICs, AIC(update.model))
+
+# Add number_of_reviews
+update.model <- update(update.model, . ~ . + Marital_Status)
+
+# summary(update.model)
+models <- append(models, as.character(update.model$call)[2])
+AICs <- append(AICs, AIC(update.model))
+
+# Add calculated_host_listings_count
+update.model <- update(update.model, . ~ . + Income_Category)
+
+# summary(update.model)
+models <- append(models, as.character(update.model$call)[2])
+AICs <- append(AICs, AIC(update.model))
+
+# Add last var
+update.model <- update(update.model, . ~ . + Card_Category)
+
+# summary(update.model)
+models <- append(models, as.character(update.model$call)[2])
+AICs <- append(AICs, AIC(update.model))
+
+res <- data.frame(
+  Model = models,
+  AIC = AICs
+)
+knitr::kable(res)
+
+#The AIC table shows the best model is 
+#Credit_Limit ~ Customer_Age + Gender + Dependent_count + Education_Level + Marital_Status + Income_Category + Card_Category. 
+#With a AIC of 72870.02, we want the lowest AIC.
+#To recal: # AIC estimates the relative amount of information lost by a given model:
+  #the less information a model loses, the higher the quality of that model.
+  #  Lower AIC values indicate a better-fit model,
+
+#----------------------------
+#
+#----------------------------
+par(mfrow = c(3,1))
+plot(update.model, 1)
+plot(update.model, 2)
+plot(update.model, 3)
+
+```
+
+
+RMSE
+#RMSE
+RMSE.lm.train <- sqrt(mean(update.model$residuals^2))
+# predict
+predict.test <- predict(update.model, test.set[-5])
+RMSE.lm.test <- RMSE(test.set$Credit_Limit, predict.test)
+RMSE.out <- data.frame(
+  'Linear' <- c(RMSE.lm.train, RMSE.lm.test)
+)
+colnames(RMSE.out) <- c('Linear Regression')
+rownames(RMSE.out) <- c('training', 'test')
+knitr::kable(RMSE.out, caption = 'RMSE table')
+```{r ModelingPt4}
+
+#----------------------------
+#
+#----------------------------
+#Log-linear Regression:
+
+log.lm <- lm(log(Credit_Limit) ~ Customer_Age + Gender + Dependent_count + Education_Level + Marital_Status + Income_Category + Card_Category, data = dataCC5)
+summary(log.lm)
+#Gender Male, Income Categories, and Silver Card Card Categories were highly significant with respect to our predictor of Credit Limit. 
+
+```
+
